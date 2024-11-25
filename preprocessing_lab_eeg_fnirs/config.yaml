@@ -1,0 +1,9 @@
+defaults:
+  data_loader:
+    # test: [1,2,'c']
+    path: 'D:\dataset\data_set_one'
+    file: ''
+
+
+    epoch_start: -5
+    epoch_end: 25

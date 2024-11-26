@@ -1,7 +1,8 @@
 import scipy
 import numpy as np
-from AttentionAlgorithms import AttentionAlgorithms
 
+from AttentionAlgorithms import AttentionAlgorithms
+from gen_epoch_windows import gen_STFT
 
 def compute_attention(raw_data_, original_sampling_rate, resampling_rate, interval, algorithm):
     """
@@ -85,9 +86,31 @@ def spectral_features(x, new_frequency, feature_name='spectral_power', params_st
         # ---------------------------------------------------------------------
         # apply spectral analysis with periodogram or welch periodogram
         # ---------------------------------------------------------------------
-        # TODO. implement periodogram and welch periodogram
-        pass
+        pxx, itotal_bandpass, f_scale, fft_length, fp = gen_spectrum(x, new_frequency, params_st, 1)
+        pxx = pxx * new_frequency  # shape(230401,)
+        point_num_dc2nyquist = pxx.shape[0]  # 230401
+        if feature_name == 'spectral_relative_power':
+            pxx_total = np.sum(pxx[itotal_bandpass]) / fft_length
+        else:
+            pxx_total = 1
+
+        # spec_pow = np.full([1, freq_bands.shape[0]], np.nan)  # shape(1, 4)
+
+        res_li = []
+        for p in range(freq_bands.shape[0]):
+            ibandpass = np.arange(np.ceil(freq_bands[p, 0] * f_scale), np.floor(freq_bands[p, 1]) * f_scale,
+                                  dtype=int)  # 231-1843
+            ibandpass = ibandpass + 1  # ## ? 这里似乎应该是ibandpass = np.append(ibandpass, ibandpass[-1]+1)
+            ibandpass[ibandpass < 1] = 0
+            ibandpass[ibandpass > point_num_dc2nyquist] = point_num_dc2nyquist
+
+            # spec_pow[0, p] = np.sum(pxx[ibandpass]) / (fft_length * pxx_total)
+            # return spec_pow[0]
+
+            res_li.append(np.sum(pxx[ibandpass]) / (fft_length * pxx_total))
+        return np.array(res_li)
     elif feature_name == 'spectral_power_by_scipy':
+    # if feature_name == 'spectral_power':
 
         # nperseg 窗口点数
         # noverlap 重叠点数
@@ -134,3 +157,100 @@ def normalize(value, min_old=0.0, max_old=2.0, min_new=0, max_new=100):
     value_clipped = np.clip(value, min_old, max_old)
     normalized_value = (value_clipped - min_old) / (max_old - min_old) * (max_new - min_new) + min_new
     return normalized_value
+
+def gen_spectrum(x, Fs, params_st, SCALE_PSD=0):
+    """
+    变换成频谱
+    """
+
+    # remove NaNs
+    x[np.isnan(x)] = []
+
+    if params_st.method.lower() == 'periodogram':
+        # ---------------------------------------------------------------------
+        # Periodogram
+        # frequencies, psd = scipy.signal.periodogram(data)
+        # ---------------------------------------------------------------------
+        X = np.abs(np.fft.fft(x)) ** 2
+
+        # positive frequencies only:
+        N = len(X)
+        Nh = int(np.floor(N / 2))
+        Nfreq = N
+        X = X[:Nh + 1]  # including DC and Nyquist frequencies
+        pxx = X / (Fs * N)  # normalize by Fs and N, where Fs is the new frequency and N is the number of new data points
+        frequencies = np.fft.fftfreq(N, 1 / Fs)[:Nh + 1]
+
+
+        # ##
+        # X_ = (np.abs(np.fft.fft(x)) ** 2)[Nh + 1 :]
+        # nxx = X_ / (Fs * N)
+        #
+        # freqs = np.fft.fftfreq(N, 1 / Fs)[:Nh + 1]
+        # freqs_n = np.fft.fftfreq(N, 1 / Fs)[Nh + 1:]
+        # import matplotlib.pyplot as plt
+        # # 绘制功率谱密度
+        # plt.figure(figsize=(8, 6))
+        # plt.plot(freqs, pxx)
+        # plt.plot(freqs_n, nxx)
+        # plt.title('Power Spectral Density (Periodogram)')
+        # plt.xlabel('Frequency (Hz)')
+        # plt.ylabel('Power Spectral Density')
+        # plt.grid(True)
+        # plt.show()
+
+    elif params_st.method.lower() == 'welch_periodogram':
+        # ---------------------------------------------------------------------
+        # Welch periodogram
+        # frequencies, psd = scipy.signal.welch(data)
+        # ---------------------------------------------------------------------
+        S_stft, Nfreq, f_scale, win_epoch = gen_STFT(x, params_st.L_window, params_st.window_type, params_st.overlap, Fs)
+
+        # average over time:
+        pxx = np.nanmean(S_stft, 0)
+
+        N = len(pxx)
+        # normalise (so similar to pwelch):
+        E_win= np.sum(np.abs(win_epoch)**2) / Nfreq
+        pxx=(pxx/(Nfreq*E_win*Fs))
+
+    else:
+        print(f'unknown spectral method "{params_st.method}"; check spelling\n')
+        pxx = np.nan
+        itotal_bandpass = np.nan
+        f_scale = np.nan
+        fp = np.nan
+
+    # in order to conserve the total power of both positive and negative frequencies
+    if SCALE_PSD:
+        pscale = np.ones([1, len(pxx)]) + 1
+        if Nfreq % 2:
+            pscale[0, 0] = 1
+        else:
+            pscale[0, 0], pscale[0, -1] = 1, 1
+
+        pxx = pxx * pscale
+        pxx = pxx[0]
+
+    N = pxx.shape[0]
+    f_scale = Nfreq / Fs  # points/sampling
+
+    # for plotting only:
+    fp = np.arange(N) / f_scale
+
+    if hasattr(params_st, 'total_freq_bands'):
+        total_freq_bands = params_st.total_freq_bands
+        # b) limit to frequency band of interest:
+        # print('test total freq bands', total_freq_bands[1])
+        total_freq_bands_low = np.ceil(total_freq_bands[0] * f_scale)
+        total_freq_bands_high = np.floor(total_freq_bands[1] * f_scale)
+        itotal_bandpass = np.arange(total_freq_bands_low + 1, total_freq_bands_high + 2, dtype=int)
+
+        itotal_bandpass[itotal_bandpass < 1] = 0
+        itotal_bandpass[itotal_bandpass > N] = N
+
+    else:
+        itotal_bandpass = np.nan
+
+    return pxx, itotal_bandpass, f_scale, Nfreq, fp
+

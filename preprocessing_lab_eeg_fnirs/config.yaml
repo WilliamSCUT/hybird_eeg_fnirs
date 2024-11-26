@@ -1,9 +1,25 @@
 defaults:
-  data_loader:
-    # test: [1,2,'c']
-    path: 'D:\dataset\data_set_one'
-    file: ''
+  # test: [1,2,'c']
+  data_path: 'D:\\dataset\\data_set_one'
+  data_file: ''
 
+  device:
+    type: 'eeg_fnirs'
+    sampling_rate: 1000
 
-    epoch_start: -5
-    epoch_end: 25
+  preprocessing:
+    filter_chebyshev:
+      Wp: [0.04, 0.3]  # pass band (0.04*200/2)=4 to (0.35*200/2)=35
+      Ws: [0.01, 0.35]  # stop band edge
+      Rp: 3
+      Rs: 30
+
+    resample: 64  # Hz
+    epoch:
+      epoch_start: -5
+      epoch_end: 25
+    window:
+      window_start: -5
+      window_end: 10
+      window_duration: 3.0
+

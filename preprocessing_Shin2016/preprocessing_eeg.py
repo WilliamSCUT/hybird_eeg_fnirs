@@ -151,6 +151,7 @@ def compute_(current_window_data):
         # for each trial
         # get the data of the trial
         trial_data = data[trial]  # in shape of (15, 600)
+        # from my
         # get the label of the trial
         trial_label = labels[trial]  # 4(32) for rest, 3(16) for subtraction
 
@@ -265,7 +266,7 @@ if __name__ == "__main__":
         'down_sampling_rate': 200,
 
         'epoch_start': -5,
-        'epoch_end': 25,
+        'epoch_end': 10,
 
         'baseline': (-3.0, -0.05),  # base of each epoch is from -3s to 0s
 
@@ -278,7 +279,7 @@ if __name__ == "__main__":
             }
         },
 
-        'windows': range(-5, 25),
+        'windows': range(-5, 10),
         'window_duration': 3.0  # 0+3, 1+3, 2+3, 3+3, 4+3, 5+3, 6+3, 7+3, 8+3, 9+3
 
     }

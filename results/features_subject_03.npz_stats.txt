@@ -1,0 +1,6 @@
+
+Statistical Analysis:
+Low Attention (Rest) - Mean: 38.34, Std: 12.49
+High Attention (Arithmetic) - Mean: 62.45, Std: 13.71
+T-statistic: -7.24
+P-value: 0.0000
